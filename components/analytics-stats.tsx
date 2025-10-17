@@ -86,8 +86,8 @@
 import useSWR from "swr";
 import { API_BASE, swrFetcher } from "@/lib/api";
 import { TrendingUp, TrendingDown, Wallet, Info } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import CountUp from "react-countup";
 
 // ---------------------- TYPES ----------------------
 type AnalyticsResponse = {
@@ -105,25 +105,6 @@ type StatCardProps = {
 
 // ---------------------- STAT CARD COMPONENT ----------------------
 const StatCard: React.FC<StatCardProps> = ({ title, value, colorClass, Icon }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  // Animate number counting up
-  useEffect(() => {
-    let start = 0;
-    const end = value;
-    if (end === 0) return;
-
-    const duration = 800; // ms
-    const stepTime = Math.abs(Math.floor(duration / end));
-    const timer = setInterval(() => {
-      start += 1;
-      setDisplayValue(start);
-      if (start >= end) clearInterval(timer);
-    }, stepTime);
-
-    return () => clearInterval(timer);
-  }, [value]);
-
   return (
     <motion.div
       className="bg-black border border-gray-800 rounded-lg p-5 cursor-pointer transition-all hover:scale-105 hover:shadow-lg hover:bg-gradient-to-br hover:from-gray-900 hover:via-gray-800 hover:to-gray-900"
@@ -137,12 +118,16 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, colorClass, Icon }) =
         <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">{title}</span>
         <div className="flex items-center gap-1">
           <Icon className={`h-6 w-6 ${colorClass}`} />
-          {/* Optional info tooltip */}
           <Info className="h-4 w-4 text-gray-400 hover:text-gray-200" />
         </div>
       </div>
       <div className={`text-2xl font-bold ${colorClass}`}>
-        ₹{displayValue.toLocaleString("en-IN")}
+        <CountUp
+          end={value}
+          duration={1.5}      // animation duration in seconds
+          separator=","       // 1,000 format
+          prefix="₹"          // currency symbol
+        />
       </div>
     </motion.div>
   );
