@@ -197,131 +197,168 @@
 // }
 
 
+"use client"
 
-// components/analytics-stats.tsx
-"use client";
+import useSWR from "swr"
+import { API_BASE, swrFetcher } from "@/lib/api"
+import { PieChartIcon, BarChartIcon } from "lucide-react"
+import { motion, Variants } from "framer-motion"
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts"
 
-import useSWR from "swr";
-import { API_BASE, swrFetcher } from "@/lib/api";
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
-
-// ---------------------- TYPES ----------------------
+type CategoryTotal = { category: string; amount: number }
+type MonthlyRow = { month: string; income: number; expense: number }
 type AnalyticsResponse = {
-  totalIncome?: number;
-  totalExpense?: number;
-  balance?: number;
-};
+  categoryTotals?: CategoryTotal[]
+  monthly?: MonthlyRow[]
+}
 
-type StatCardProps = {
-  title: string;
-  value: number;
-  colorClass: string;
-  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-};
+const CHART_COLORS = ["#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#f59e0b", "#06b6d4"]
 
-// ---------------------- COUNT-UP HOOK ----------------------
-const useCountUp = (target: number, duration: number = 1000) => {
-  const [count, setCount] = useState(0);
+// Smooth fade-up animation for cards
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+}
 
-  useEffect(() => {
-    let start = 0;
-    const increment = target / (duration / 16);
-    const step = () => {
-      start += increment;
-      if (start < target) {
-        setCount(Math.floor(start));
-        requestAnimationFrame(step);
-      } else {
-        setCount(target);
-      }
-    };
-    step();
-  }, [target, duration]);
+// Fade in for charts after delay
+const chartVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { delay: 0.2, duration: 0.4, ease: "easeOut" } },
+}
 
-  return count;
-};
-
-// ---------------------- STAT CARD COMPONENT ----------------------
-const StatCard: React.FC<StatCardProps> = ({ title, value, colorClass, Icon }) => {
-  const count = useCountUp(value);
-
-  return (
-    <motion.div
-      className="bg-black border border-gray-800 rounded-lg p-5 hover:scale-105 hover:shadow-xl transition-all"
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ type: "spring", stiffness: 200, damping: 20 }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">{title}</span>
-        <Icon className={`h-5 w-5 ${colorClass}`} />
-      </div>
-      <div className={`text-2xl font-bold ${colorClass}`}>₹{count.toLocaleString("en-IN")}</div>
-    </motion.div>
-  );
-};
-
-// ---------------------- MAIN COMPONENT ----------------------
-export default function AnalyticsStats() {
-  const { data, error, isLoading } = useSWR<AnalyticsResponse>("/analytics", swrFetcher);
-
-  const totalIncome = data?.totalIncome ?? 0;
-  const totalExpense = data?.totalExpense ?? 0;
-  const balance = data?.balance ?? totalIncome - totalExpense;
-
-  const stats = [
-    { title: "Income", value: totalIncome, colorClass: "text-emerald-400", Icon: TrendingUp },
-    { title: "Expenses", value: totalExpense, colorClass: "text-red-400", Icon: TrendingDown },
-    { title: "Balance", value: balance, colorClass: balance >= 0 ? "text-blue-400" : "text-red-400", Icon: Wallet },
-  ];
-
-  const gridClass = "grid grid-cols-1 md:grid-cols-3 gap-6";
-
-  if (isLoading) {
+// --- Custom Tooltips ---
+const CustomPieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
     return (
-      <div className={gridClass}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-black border border-gray-800 rounded-lg p-5 animate-pulse">
-            <div className="h-3 bg-gray-800 rounded w-20 mb-3"></div>
-            <div className="h-7 bg-gray-800 rounded w-28"></div>
+      <div className="rounded-md bg-black border border-gray-700 p-2 text-sm text-white shadow-lg">
+        <p className="font-medium">{payload[0].name}</p>
+        <p className="text-gray-300">₹{payload[0].value.toLocaleString("en-IN")}</p>
+      </div>
+    )
+  }
+  return null
+}
+
+const CustomBarTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-md bg-black border border-gray-700 p-2 text-sm text-white shadow-lg min-w-[120px]">
+        <p className="font-medium mb-1">{label}</p>
+        {payload.map((entry: any, i: number) => (
+          <div key={i} className="flex justify-between text-gray-300 text-xs">
+            <span>{entry.name}</span>
+            <span className="font-semibold text-white">₹{entry.value.toLocaleString("en-IN")}</span>
           </div>
         ))}
       </div>
-    );
+    )
   }
+  return null
+}
 
-  if (error) {
-    return (
-      <div className="bg-black border border-red-900 rounded-lg p-5">
-        <p className="text-red-400 text-sm">Failed to load stats</p>
-      </div>
-    );
-  }
+export default function AnalyticsDashboard() {
+  const { data, error, isLoading } = useSWR<AnalyticsResponse>("/analytics", swrFetcher)
+  const categoryData = data?.categoryTotals?.filter(c => c.amount > 0) ?? []
+  const monthlyData = data?.monthly ?? []
 
   return (
     <motion.div
-      className={gridClass}
+      className="grid grid-cols-1 lg:grid-cols-2 gap-6"
       initial="hidden"
       animate="visible"
-      variants={{
-        hidden: {},
-        visible: { transition: { staggerChildren: 0.15 } },
-      }}
+      variants={{ visible: { transition: { staggerChildren: 0.15 } } }}
     >
-      <AnimatePresence>
-        {stats.map((stat) => (
-          <StatCard
-            key={stat.title}
-            title={stat.title}
-            value={stat.value}
-            colorClass={stat.colorClass}
-            Icon={stat.Icon}
-          />
-        ))}
-      </AnimatePresence>
+      {/* Category Pie Chart */}
+      <motion.div
+        className="rounded-xl border border-gray-800 bg-[#0b0b0b] p-6 hover:border-gray-700 transition-all"
+        variants={cardVariants}
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <PieChartIcon className="w-4 h-4 text-blue-400" />
+          <h3 className="text-lg font-semibold text-white">Category Breakdown</h3>
+        </div>
+
+        <motion.div variants={chartVariants} className="h-72 w-full flex items-center justify-center">
+          {isLoading ? (
+            <p className="text-gray-500 text-sm">Loading...</p>
+          ) : error ? (
+            <p className="text-red-400 text-sm">Failed to load</p>
+          ) : categoryData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={categoryData}
+                  dataKey="amount"
+                  nameKey="category"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  stroke="none"
+                >
+                  {categoryData.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomPieTooltip />} cursor={false} />
+                <Legend
+                  verticalAlign="bottom"
+                  height={30}
+                  wrapperStyle={{ fontSize: "12px", color: "#9ca3af" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-500 text-sm">No data</p>
+          )}
+        </motion.div>
+      </motion.div>
+
+      {/* Monthly Bar Chart */}
+      <motion.div
+        className="rounded-xl border border-gray-800 bg-[#0b0b0b] p-6 hover:border-gray-700 transition-all"
+        variants={cardVariants}
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <BarChartIcon className="w-4 h-4 text-blue-400" />
+          <h3 className="text-lg font-semibold text-white">Monthly Trends</h3>
+        </div>
+
+        <motion.div variants={chartVariants} className="h-72 w-full flex items-center justify-center">
+          {isLoading ? (
+            <p className="text-gray-500 text-sm">Loading...</p>
+          ) : error ? (
+            <p className="text-red-400 text-sm">Failed to load</p>
+          ) : monthlyData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                <XAxis dataKey="month" stroke="#6b7280" tickLine={false} axisLine={false} />
+                <YAxis stroke="#6b7280" tickFormatter={(v) => `₹${v}`} axisLine={false} />
+                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: "rgba(55,65,81,0.3)" }} />
+                <Legend wrapperStyle={{ paddingTop: "8px", fontSize: "12px", color: "#9ca3af" }} />
+                <Bar dataKey="income" fill="#10b981" radius={[6, 6, 0, 0]} name="Income" />
+                <Bar dataKey="expense" fill="#ef4444" radius={[6, 6, 0, 0]} name="Expense" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-500 text-sm">No data</p>
+          )}
+        </motion.div>
+      </motion.div>
     </motion.div>
-  );
+  )
 }
